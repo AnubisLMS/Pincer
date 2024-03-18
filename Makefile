@@ -1,4 +1,4 @@
-GIT_TAG=$(git log -1 --pretty=%h)
+GIT_TAG=$(shell git log -1 --pretty=%h)
 
 help:
 	@echo 'For convenience'

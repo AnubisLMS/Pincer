@@ -6,7 +6,12 @@ help:
 	@echo 'Available make targets:'
 	@grep PHONY: Makefile | cut -d: -f2 | sed '1d;s/^/make/'
 
-all: build push
+all: context build push
+
+.PHONY: context         # Grab kubectl and registry login from doctl
+context:
+	doctl kubernetes cluster kubeconfig save anubis2 --context anubis
+	doctl registry login --context anubis
 
 .PHONY: build      # Build image
 build:

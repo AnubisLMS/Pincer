@@ -1,11 +1,24 @@
-FROM oven/bun:1.0.0
+FROM oven/bun:1-debian
+
+ENV DEBIAN_FRONTEND=noninteractive
 
 COPY ./server ./
 COPY ./shared ../
 
-RUN bun install --ci
-RUN bun run build 
+RUN set -eux; \
+    bun install --ci; \
+    bun run build; \
+    apt update; \
+    apt install --yes tini; \
+    rm -rf /var/cache/apt/*; \
+    rm -rf /var/lib/apt/lists/*
 
 EXPOSE 8000
 
+ARG GIT_TAG=latest
+ENV GIT_TAG=${GIT_TAG}
+
+USER nobody
+
+ENTRYPOINT ["tini", "--"]
 CMD [ "bun", "start"]

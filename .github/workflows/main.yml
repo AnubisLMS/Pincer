@@ -1,0 +1,53 @@
+name: Anubis Pincer CD/CI
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+
+jobs:
+  # Build Stage.
+  # Will build the docker image, and push it
+  # to the container registry.
+  build-pincer:
+    name: Build Pincer
+    runs-on: ubuntu-latest
+    environment: anubis
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+      - name: Log into DigitalOcean container registry
+        run: doctl registry login
+      - name: Build container image
+        run: env GIT_TAG=$(git log -1 --pretty=%h) docker compose build
+      - name: Build container image
+        run: env GIT_TAG=latest docker compose build
+      - name: Push image to registry
+        run: env GIT_TAG=$(git log -1 --pretty=%h) docker compose push
+      - name: Push image to registry
+        run: env GIT_TAG=latest docker compose push
+
+  # Deploy step.
+  # Will push out yaml to the k8s cluster, then restart
+  # deployments.
+  deploy:
+    name: Deploy to Anubis k8s cluster
+    needs: [ build-pincer ]
+    runs-on: ubuntu-latest
+    environment: anubis
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+      - name: Save DigitalOcean kubeconfig
+        run: doctl kubernetes cluster kubeconfig save anubis2
+      - name: Helm upgrade
+        run: make upgrade
+      - name: Verify deployment
+        run: make status

@@ -42,7 +42,9 @@ if (!OPENAI_API_KEY) {
   throw new Error("Missing OPENAI_API_KEY env variable");
 }
 
-export const supabase = createClient(supabaseUrl, supabaseKey);
+export const supabase = createClient(supabaseUrl, supabaseKey, {
+  auth: { persistSession: false },
+});
 
 interface UserRequest extends Request {
   body: {

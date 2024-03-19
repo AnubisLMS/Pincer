@@ -89,6 +89,10 @@ const authMiddleware = (
   next();
 };
 
+app.get("/", async (req: Request, res) => {
+  return res.status(200).json({'status': 'alive'}).send();
+});
+
 app.post("/user", authMiddleware, async (req: UserRequest, res) => {
   if (!req.body.netId) {
     logger.error("missing netid in the request body");

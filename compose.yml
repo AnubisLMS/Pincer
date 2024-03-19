@@ -3,6 +3,8 @@ name: pincer
 services:
   pincer:
     image: registry.digitalocean.com/anubis/pincer:${GIT_TAG:-latest}
+    ports:
+      - 8000:8000
     build:
       context: .
       dockerfile: Dockerfile.server

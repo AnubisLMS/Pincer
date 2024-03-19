@@ -10,12 +10,11 @@ import express, {
 import bodyParser from "body-parser";
 import { createClient } from "@supabase/supabase-js";
 import { Completion, User, DocumentChange } from "shared";
-import { CompletionSource } from "./types";
+import { CompletionSource, DEFAULT_CONFIGURATION } from "./types";
 import { constructOpenAICompletionRequest } from "./completion";
 
 const logger = pino({
   level: "info",
-  prettifier: require("pino-pretty")(),
 });
 
 const app = express();
@@ -83,7 +82,7 @@ const authMiddleware = (
   next: NextFunction,
 ) => {
   const authKey = req.headers["auth-key"];
-  if (!authKey || authKey !== process.env.AUTH_KEY) {
+  if ((!authKey || authKey !== process.env.AUTH_KEY) && process.env.PROD) {
     return res.status(403).send("Forbidden: Invalid AUTH key");
   }
   next();
@@ -128,8 +127,10 @@ app.post("/user", authMiddleware, async (req: UserRequest, res) => {
           supabase.from("UserSettings").insert([
             {
               net_id: req.body.netId,
-              model: OpenAIModel.Turbo35,
-              source: CompletionSource.OpenAI,
+              source: DEFAULT_CONFIGURATION.source,
+              model: DEFAULT_CONFIGURATION.model,
+              url: DEFAULT_CONFIGURATION.url,
+              maxTokens: DEFAULT_CONFIGURATION.maxTokens,
               enabled: true,
             },
           ]),
@@ -222,7 +223,6 @@ app.post("/completion", authMiddleware, async (req: CompletionRequest, res) => {
       }
 
       return ResultAsync.fromPromise(request, (error) => {
-        logger.info(error);
         return error;
       }).match(
         (ok) => {
@@ -234,8 +234,8 @@ app.post("/completion", authMiddleware, async (req: CompletionRequest, res) => {
             .send();
         },
         (err) => {
-          logger.error(err);
-          req.log.error(err);
+          logger.error(err.message)
+          // req.log.error(err);
           return res.status(500).send();
         },
       );

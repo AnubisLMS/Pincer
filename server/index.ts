@@ -10,17 +10,12 @@ import express, {
 import bodyParser from "body-parser";
 import { createClient } from "@supabase/supabase-js";
 import { Completion, User, DocumentChange } from "shared";
-import { CompletionType, DEFAULT_CONFIGURATION } from "./types";
-import {
-  constructChatCompletionRequest,
-  constructTextCompletionRequest,
-} from "./completion";
-import * as dotenv from "dotenv";
-
-dotenv.config();
+import { CompletionSource } from "./types";
+import { constructOpenAICompletionRequest } from "./completion";
 
 const logger = pino({
   level: "info",
+  prettifier: require("pino-pretty")(),
 });
 
 const app = express();
@@ -88,7 +83,7 @@ const authMiddleware = (
   next: NextFunction,
 ) => {
   const authKey = req.headers["auth-key"];
-  if ((!authKey || authKey !== process.env.AUTH_KEY) && process.env.PROD) {
+  if (!authKey || authKey !== process.env.AUTH_KEY) {
     return res.status(403).send("Forbidden: Invalid AUTH key");
   }
   next();
@@ -133,10 +128,8 @@ app.post("/user", authMiddleware, async (req: UserRequest, res) => {
           supabase.from("UserSettings").insert([
             {
               net_id: req.body.netId,
-              model: DEFAULT_CONFIGURATION.model,
-              url: DEFAULT_CONFIGURATION.url,
-              max_tokens: DEFAULT_CONFIGURATION.maxTokens,
-              completion_type: DEFAULT_CONFIGURATION.completionType,
+              model: OpenAIModel.Turbo35,
+              source: CompletionSource.OpenAI,
               enabled: true,
             },
           ]),
@@ -183,6 +176,9 @@ app.get("/settings/:id", authMiddleware, async (req: Request, res) => {
   );
 });
 
+// Settings
+// completion endpoint
+
 app.post("/completion", authMiddleware, async (req: CompletionRequest, res) => {
   return await ResultAsync.fromPromise(
     supabase.from("UserSettings").select("*").eq("net_id", req.body.netId),
@@ -204,37 +200,18 @@ app.post("/completion", authMiddleware, async (req: CompletionRequest, res) => {
         });
       }
 
-      const completionType = ok.data[0].completion_type;
-      const model = ok.data[0].model;
-      const url = ok.data[0].url;
-      const maxTokens = ok.data[0].max_tokens;
-
-      logger.info(
-        `user ${req.body.netId} has completion enabled with model ${model} and completion type ${completionType}`,
-      );
+      const source = ok.data[0].source;
 
       let request: Promise<any>;
 
-      switch (completionType) {
-        case CompletionType.Chat: {
-          request = constructChatCompletionRequest({
+      switch (source) {
+        case CompletionSource.OpenAI: {
+          request = constructOpenAICompletionRequest({
             prompt: req.body.prompt,
             context: req.body.context,
-            model,
+            model: ok.data[0].model,
             fileExtension: req.body.fileExtension,
-            url,
-            maxTokens,
-          });
-          break;
-        }
-        case CompletionType.Text: {
-          request = constructTextCompletionRequest({
-            prompt: req.body.prompt,
-            context: req.body.context,
-            model,
-            fileExtension: req.body.fileExtension,
-            url,
-            maxTokens,
+            maxTokens: 1000,
           });
           break;
         }
@@ -245,18 +222,20 @@ app.post("/completion", authMiddleware, async (req: CompletionRequest, res) => {
       }
 
       return ResultAsync.fromPromise(request, (error) => {
+        logger.info(error);
         return error;
       }).match(
         (ok) => {
-          return res
+          res
             .status(200)
             .json({
-              completion: ok,
+              completion: ok.data.response,
             })
             .send();
         },
         (err) => {
           logger.error(err);
+          req.log.error(err);
           return res.status(500).send();
         },
       );

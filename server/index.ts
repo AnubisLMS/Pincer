@@ -92,7 +92,7 @@ const authMiddleware = (
   next();
 };
 
-app.get("/health", async (_req, res) => {
+app.get("/", async (_req, res) => {
   return res.status(200).send("ok");
 });
 
